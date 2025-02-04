@@ -195,11 +195,15 @@ ws.onmessage = (event) => {
 
     case "next-turn":
       currentTurnPlayer = data.currentPlayer;
-      isPlayerTurn = currentPseudo === data.currentPlayer;
+      isPlayerTurn = (currentPseudo === data.currentPlayer);
+      // Réinitialiser l'état pour le nouveau tour
+      isCardDrawn = false;
+      drawnCard = null;
       hasDiscarded = false;
       drawSource = null;
       // appendMessage(`Tour suivant: ${data.currentPlayer}`);
       updateTurnDisplay(data.currentPlayer);
+      updateAvailableActions();
       break;
 
     case "card-drawn":
@@ -218,6 +222,8 @@ ws.onmessage = (event) => {
       } else {
         appendMessage(`${data.player} a pioché un ${data.card.value}`);
       }
+      
+      updateAvailableActions();
       break;
 
     case "card-discarded":
@@ -240,13 +246,15 @@ ws.onmessage = (event) => {
       displayGameArea(data.deckSize, data.discardPile);
       isCardDrawn = false;
       drawnCard = null;
-      hasDiscarded = drawSource === 'deck';
+      hasDiscarded = true;
       drawnCardDisplay.style.display = "none";
+      updateAvailableActions();
       break;
 
     case "card-drawn-from-discard":
       drawnCard = data.card;
       isCardDrawn = true;
+      drawSource = 'discard';
       drawnCardDisplay.innerHTML = '';
       const discardCardImg = document.createElement("img");
       discardCardImg.src = data.card.image;
@@ -259,6 +267,7 @@ ws.onmessage = (event) => {
       } else {
         appendMessage(`${data.player} a pioché une carte de la défausse`);
       }
+      updateAvailableActions();
       break;
 
     case "column-update":
@@ -374,6 +383,13 @@ function displayPlayersHands(players) {
   players.forEach((player) => {
     const playerDiv = document.createElement("div");
     playerDiv.className = "hand";
+    // On identifie la main par le pseudo du joueur
+    playerDiv.dataset.pseudo = player.pseudo;
+    
+    // Pour les mains des adversaires, on ajoute toujours la classe "dim"
+    if (player.pseudo !== currentPseudo) {
+      playerDiv.classList.add("dim");
+    }
     
     const playerInfoDiv = document.createElement("div");
     playerInfoDiv.className = "player-info";
@@ -382,14 +398,12 @@ function displayPlayersHands(players) {
     playerName.textContent = player.pseudo;
     playerName.dataset.pseudo = player.pseudo;
     
+    // Ici, vous pouvez conserver le coloriage des pseudos selon vos critères
     if (gameLaunched) {
       if (player.pseudo === currentPseudo) {
-        // Pour votre pseudo : vert si c'est votre tour, sinon rouge.
-        playerName.style.color = isPlayerTurn ? "#c0392b" : "#27ae60";
+        playerName.style.color = isPlayerTurn ? "#27ae60" : "#c0392b";
       } else {
-        // Pour les adversaires : s'il s'agit du joueur actif, son pseudo doit être vert,
-        // sinon (c'est qu'il attend son tour) il sera affiché en rouge.
-        playerName.style.color = isPlayerTurn ? "#27ae60" : (player.pseudo === currentTurnPlayer ? "#c0392b" : "#27ae60");
+        playerName.style.color = isPlayerTurn ? "#c0392b" : (player.pseudo === currentTurnPlayer ? "#27ae60" : "#c0392b");
       }
     } else {
       playerName.style.color = "#666";
@@ -408,7 +422,7 @@ function displayPlayersHands(players) {
     const deckContainer = document.createElement("div");
     deckContainer.className = "deck-row";
 
-    // Créer une matrice 4x3 pour faciliter la vérification des colonnes
+    // Création de la grille de cartes (colonnes et lignes)
     const cardGrid = Array(4).fill().map(() => Array(3).fill(null));
     player.hand.forEach((card, index) => {
       const col = Math.floor(index / 3);
@@ -421,7 +435,7 @@ function displayPlayersHands(players) {
       const column = document.createElement("div");
       column.className = "deck-column";
       
-      // Vérifier si la colonne a 3 cartes identiques et visibles
+      // Vérifier la complétude de la colonne
       const columnCards = cardGrid[col];
       const isColumnComplete = columnCards.every(card => 
         card && 
@@ -429,8 +443,6 @@ function displayPlayersHands(players) {
         columnCards[0] && 
         card.value === columnCards[0].value
       );
-
-      // Vérifier si la colonne n'est pas déjà marquée comme complétée
       const isAlreadyCompleted = columnCards.every(card => card && card.columnCompleted);
 
       for (let row = 0; row < 3; row++) {
@@ -438,8 +450,6 @@ function displayPlayersHands(players) {
         if (card) {
           const cardImg = document.createElement("img");
           cardImg.classList.add("card", "rounded");
-          
-          // Afficher la bonne face de la carte
           cardImg.src = card.visible ? card.image : "/images/back.png";
           
           cardImg.dataset.image = card.image;
@@ -457,7 +467,6 @@ function displayPlayersHands(players) {
             cardImg.classList.add("cursor_pointer");
             cardImg.addEventListener("click", flipCard);
           }
-
           column.appendChild(cardImg);
         }
       }
@@ -594,4 +603,46 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
+
+function updateAvailableActions() {
+  const deckElement = document.getElementById('deck');
+  const discardPileElement = document.getElementById('discard-pile');
+  // On sélectionne uniquement la main du joueur local
+  const localHandElement = document.querySelector('#players-hands .hand[data-pseudo="' + currentPseudo + '"]');
+
+  console.log("updateAvailableActions:", { isPlayerTurn, isCardDrawn, hasDiscarded, drawSource });
+
+  if (!isPlayerTurn) {
+    // Ce n'est pas votre tour : tout reste assombri.
+    deckElement.classList.add('dim');
+    discardPileElement.classList.add('dim');
+    if (localHandElement) localHandElement.classList.add('dim');
+  } else {
+    // C'est votre tour
+    if (!isCardDrawn && !hasDiscarded) {
+      // Au début du tour, aucune carte n'a été piochée :
+      // La pioche et la défausse sont actives, la main est assombrie.
+      deckElement.classList.remove('dim');
+      discardPileElement.classList.remove('dim');
+      if (localHandElement) localHandElement.classList.add('dim');
+    } else if (isCardDrawn) {
+      // Une carte vient d'être piochée et n'est pas encore défaussée.
+      deckElement.classList.add('dim'); // On interdit de repiocher.
+      // Si la carte provient du deck, la défausse reste active (pour pouvoir défausser).
+      if (drawSource === 'deck') {
+          discardPileElement.classList.remove('dim');
+      } else if (drawSource === 'discard') {
+          // Si la pioche était depuis la défausse, la zone défausse reste assombrie.
+          discardPileElement.classList.add('dim');
+      }
+      if (localHandElement) localHandElement.classList.remove('dim');
+    } else if (!isCardDrawn && hasDiscarded) {
+      // La carte piochée depuis le deck a été défaussée.
+      // Les zones de pioche deviennent assombries et seule la main est active.
+      deckElement.classList.add('dim');
+      discardPileElement.classList.add('dim');
+      if (localHandElement) localHandElement.classList.remove('dim');
+    }
+  }
+}
 

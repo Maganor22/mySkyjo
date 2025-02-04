@@ -71,3 +71,9 @@ body {
 .rounded {
   border-radius: 10px;
 }
+
+.dim {
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
