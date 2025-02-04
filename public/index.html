@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Skyjo Online</title>
+    <link rel="stylesheet" href="./css/style.css" />
+  </head>
+  <body class="darkMode">
+    <h1>Skyjo Online</h1>
+    <div id="turn-info"></div>
+    <div class="game_display">
+      <div id="game-area">
+        <div id="deck" class="deck"></div>
+        <div id="discard-pile" class="deck"></div>
+      </div>
+      <div id="players-hands"></div>
+    </div>
+    <div id="room-controls">
+      <input
+        type="text"
+        id="pseudoInput"
+        placeholder="Enter your pseudo"
+        value="Maga"
+      />
+      <button onclick="createRoom()">Create Room</button>
+      <input type="text" id="roomIdInput" placeholder="Room ID" />
+      <button onclick="joinRoom()">Join Room</button>
+    </div>
+    <div id="game-controls" style="display: none">
+      <div id="room-info"></div>
+      <div id="chat"></div>
+      <input type="text" id="message" />
+      <button onclick="sendMessage()">Send</button>
+      <button id="startButton" onclick="startGame()">Start Game</button>
+    </div>
+
+    <script src="./js/client.js"></script>
+    <script></script>
+  </body>
+</html>

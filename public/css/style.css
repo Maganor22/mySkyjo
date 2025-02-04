@@ -1,0 +1,73 @@
+body {
+  font-family: Arial, sans-serif;
+}
+
+#chat {
+  width: 300px;
+  height: 400px;
+  border: 1px solid #ccc;
+  overflow-y: scroll;
+  margin-bottom: 10px;
+}
+
+#message {
+  width: 300px;
+}
+
+#room-info {
+  margin-bottom: 10px;
+}
+
+.hand {
+  margin-top: 10px;
+}
+
+.card {
+  display: inline-block;
+  margin: 5px;
+  width: 4rem;
+  height: 6rem;
+}
+
+.deck-row {
+  display: flex;
+}
+
+.deck-column {
+  display: flex;
+  flex-direction: column;
+  margin-right: 10px;
+}
+
+#players-hands {
+    display: flex;
+    justify-content: space-evenly;
+}
+
+.darkMode {
+  background-color: #333;
+  color: #fff;
+}
+
+.game_display {
+  display: none;
+}
+
+#game-area {
+  display: flex;
+  justify-content: center;
+}
+
+.card_pioche,
+.card_defausse {
+  width: 6rem;
+  height: 9rem;
+}
+
+.cursor_pointer {
+  cursor: pointer;
+}
+
+.rounded {
+  border-radius: 10px;
+}
