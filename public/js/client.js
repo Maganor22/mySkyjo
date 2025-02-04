@@ -17,6 +17,8 @@ let drawnCard = null;
 let isCardDrawn = false;
 let hasDiscarded = false;
 let drawSource = null; // 'deck' ou 'discard'
+let lastRoundTriggered = false;
+let isLastRound = false;
 
 const cardPioche = document.createElement("img");
 cardPioche.classList.add("card_pioche", "cursor_pointer", "rounded");
@@ -174,19 +176,30 @@ ws.onmessage = (event) => {
       break;
 
     case "card-flipped":
+      // Mise à jour de l'affichage de la carte retournée
       updateFlippedCard(data.cardId, data.image, data.value);
-      const playerElement = document.querySelector(
-        `[data-pseudo='${data.pseudo}']`
-      );
+      
+      // Mise à jour éventuelle d'autres informations (par exemple, le nombre de cartes retournées)
+      const playerElement = document.querySelector(`[data-pseudo='${data.pseudo}']`);
       if (playerElement) {
         playerElement.dataset.chooseCard = data.chooseCard;
       }
-      console.log(
-        `Player ${data.pseudo} has flipped ${data.chooseCard} cards.`
-      );
-      // Mettre à jour l'affichage des points après le retournement d'une carte
+      console.log(`Player ${data.pseudo} a retourné ${data.chooseCard} carte(s).`);
+      
+      // Mettre à jour les mains affichées et les points
       displayPlayersHands(data.players);
       appendMessage(`${data.pseudo} a retourné une carte`);
+
+      // Pour le joueur local, si toutes les cartes sont visibles, on déclenche le dernier tour.
+      if (data.pseudo === currentPseudo && !lastRoundTriggered && isLocalHandFullyVisible()) {
+        console.log("Tous les éléments de la main sont visibles, déclenchement du dernier tour.");
+        ws.send(JSON.stringify({
+            type: "last-round-trigger",
+            pseudo: currentPseudo
+        }));
+        lastRoundTriggered = true;
+        appendMessage("Dernier tour déclenché !");
+      }
       break;
 
     case "turn-ended":
@@ -276,6 +289,22 @@ ws.onmessage = (event) => {
       if (data.completedValue) {
         appendMessage(`Une colonne de ${data.completedValue} a été complétée!`);
       }
+      break;
+
+    // Le serveur indique que c'est le dernier tour (le joueur qui déclenche son dernier retournement a lancé cette étape)
+    case "last-round":
+      isLastRound = true;
+      appendMessage("C'est le dernier tour !");
+      break;
+
+    // Une fois le dernier tour terminé, le serveur envoie l'issue de la partie
+    case "game-over":
+      // Le serveur fournit dans data.players les mains complètes pour chaque joueur,
+      // éventuellement en mettant à jour les cartes cachées pour les révéler.
+      displayPlayersHands(data.players);
+      // data.winner est, par exemple, le pseudo du gagnant,
+      // data.results peut être un tableau indiquant pour chaque joueur le total des points.
+      showGameOverPopup(data.winner, data.results);
       break;
 
     default:
@@ -556,11 +585,14 @@ function flipCard(event) {
 }
 
 function updateFlippedCard(cardId, image, value) {
-  const cardImg = document.querySelector(`img[data-id="${cardId}"]`);
+  // Recherche de l'image de la carte à l'aide de son attribut data-id
+  const cardImg = document.querySelector(`img.card[data-id="${cardId}"]`);
   if (cardImg) {
     cardImg.src = image;
+    // Mettre à jour l'attribut data-visible pour indiquer que la carte est maintenant visible
     cardImg.dataset.visible = "true";
     cardImg.dataset.value = value;
+    console.log(`Carte ${cardId} retournée, data-visible réglé à ${cardImg.dataset.visible}`);
   }
 }
 
@@ -581,6 +613,8 @@ function nextTurn() {
   isCardDrawn = false;
   drawnCard = null;
   drawnCardDisplay.style.display = "none";
+  // Si le dernier tour a été engagé, on ne réinitialise pas le flag lastRoundTriggered
+  // afin de permettre au serveur de gérer la fin de partie.
 }
 
 // Mettre à jour le style CSS
@@ -644,5 +678,61 @@ function updateAvailableActions() {
       if (localHandElement) localHandElement.classList.remove('dim');
     }
   }
+}
+
+// Fonction qui vérifie si la main locale contient uniquement des cartes visibles.
+function isLocalHandFullyVisible() {
+  const localHandElement = document.querySelector(`#players-hands .hand[data-pseudo="${currentPseudo}"]`);
+  if (!localHandElement) return false;
+  const cards = localHandElement.querySelectorAll("img.card");
+  
+  // Affichage pour le debug
+  cards.forEach(card => {
+    console.log(`Carte ${card.dataset.id} visible: ${card.dataset.visible}`);
+  });
+
+  for (let card of cards) {
+    // On teste si l'attribut data-visible vaut exactement la chaîne "true"
+    if (card.dataset.visible !== "true") {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Fonction pour afficher le gros popup final annonçant le gagnant et les scores
+function showGameOverPopup(winner, playersResults) {
+  const popup = document.createElement('div');
+  popup.className = "game-over-popup";
+  popup.style.position = "fixed";
+  popup.style.top = "50%";
+  popup.style.left = "50%";
+  popup.style.transform = "translate(-50%, -50%)";
+  popup.style.backgroundColor = "#2c3e50";
+  popup.style.color = "#ecf0f1";
+  popup.style.padding = "30px";
+  popup.style.borderRadius = "10px";
+  popup.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.3)";
+  popup.style.zIndex = "2000";
+  popup.style.textAlign = "center";
+
+  let content = `<h1>Fin de la partie !</h1>`;
+  content += `<h2>Le gagnant est ${winner} !</h2>`;
+  content += `<h3>Résultats :</h3>`;
+  content += `<ul style="list-style: none; padding: 0;">`;
+  playersResults.forEach(player => {
+    content += `<li>${player.pseudo} : ${player.points} points</li>`;
+  });
+  content += `</ul>`;
+  popup.innerHTML = content;
+  
+  document.body.appendChild(popup);
+
+  // On peut ajouter un bouton pour redémarrer la partie ou pour fermer le popup
+  setTimeout(() => {
+    popup.style.transition = "opacity 0.5s ease-out";
+    popup.style.opacity = "0";
+    setTimeout(() => popup.remove(), 500);
+  }, 5000);
 }
 
