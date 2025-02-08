@@ -28,7 +28,7 @@ const cardDefausse = document.createElement("img");
 cardDefausse.classList.add("card_defausse", "cursor_pointer", "rounded");
 discardPileDiv.appendChild(cardDefausse);
 
-deckDiv.addEventListener("click", function() {
+deckDiv.addEventListener("click", function () {
   if (!isPlayerTurn) {
     appendLog("Ce n'est pas votre tour");
     return;
@@ -36,12 +36,12 @@ deckDiv.addEventListener("click", function() {
 
   if (!isCardDrawn && !drawnCard) {
     appendLog("Pioche depuis le deck");
-    drawSource = 'deck';
+    drawSource = "deck";
     ws.send(JSON.stringify({ type: "draw-card" }));
   }
 });
 
-discardPileDiv.addEventListener("click", function() {
+discardPileDiv.addEventListener("click", function () {
   if (!isPlayerTurn) {
     appendLog("Ce n'est pas votre tour");
     return;
@@ -50,34 +50,42 @@ discardPileDiv.addEventListener("click", function() {
   if (isCardDrawn || drawnCard) {
     // Si on a déjà une carte en main, on peut la défausser
     if (drawnCard) {
-      if (drawSource === 'discard') {
+      if (drawSource === "discard") {
         // Si la carte vient de la défausse, on la repose et on ne peut que piocher
-        appendLog("Carte de la défausse reposée - vous devez piocher une nouvelle carte de la pioche");
-        ws.send(JSON.stringify({
-          type: "discard-drawn-card",
-          card: drawnCard,
-          pseudo: currentPseudo,
-          fromDiscard: true
-        }));
+        appendLog(
+          "Carte de la défausse reposée - vous devez piocher une nouvelle carte de la pioche"
+        );
+        ws.send(
+          JSON.stringify({
+            type: "discard-drawn-card",
+            card: drawnCard,
+            pseudo: currentPseudo,
+            fromDiscard: true,
+          })
+        );
       } else {
         // Si la carte vient de la pioche, on peut la défausser et retourner une carte
         appendLog("Défausse de la carte piochée");
-        ws.send(JSON.stringify({
-          type: "discard-drawn-card",
-          card: drawnCard,
-          pseudo: currentPseudo,
-          fromDiscard: false
-        }));
+        ws.send(
+          JSON.stringify({
+            type: "discard-drawn-card",
+            card: drawnCard,
+            pseudo: currentPseudo,
+            fromDiscard: false,
+          })
+        );
       }
     }
   } else {
     // Sinon, on peut piocher depuis la défausse
     appendLog("Pioche depuis la défausse");
-    drawSource = 'discard';
-    ws.send(JSON.stringify({
-      type: "draw-from-discard",
-      pseudo: currentPseudo
-    }));
+    drawSource = "discard";
+    ws.send(
+      JSON.stringify({
+        type: "draw-from-discard",
+        pseudo: currentPseudo,
+      })
+    );
   }
 });
 
@@ -103,11 +111,19 @@ function appendLog(message) {
   logTextArea.scrollTop = logTextArea.scrollHeight;
 }
 
+// function calculatePoints(hand) {
+//   return hand.reduce((total, card) => {
+//     // Ajouter les points seulement si la carte est visible et non complétée
+//     if (card.visible && !card.columnCompleted) {
+//       return total + parseInt(card.value);
+//     }
+//     return total;
+//   }, 0);
+// }
 function calculatePoints(hand) {
   return hand.reduce((total, card) => {
-    // Ajouter les points seulement si la carte est visible et non complétée
-    if (card.visible && !card.columnCompleted) {
-      return total + parseInt(card.value);
+    if (card.visible) {
+      return total + (card.value || 0); // Assurez-vous que card.value est défini
     }
     return total;
   }, 0);
@@ -116,7 +132,29 @@ function calculatePoints(hand) {
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
   appendLog(`Message reçu: ${data.type}`);
+  if (data.type === "game-over") {
+    // Vérifiez que les résultats sont définis et sont un tableau
+    if (!data.results || !Array.isArray(data.results)) {
+      console.error("Invalid players data: undefined");
+      console.log("Received data:", data); // Log des données reçues
+      return;
+    }
 
+    // Vérifiez chaque joueur
+    data.results.forEach((player) => {
+      if (
+        !player.pseudo ||
+        player.score === undefined ||
+        !Array.isArray(player.hand)
+      ) {
+        console.error("Invalid player data:", player);
+        return;
+      }
+    });
+
+    // Continuez avec le traitement des données des joueurs
+    displayPlayersHands(data.results);
+  }
   switch (data.type) {
     case "room-created":
       roomInfo.textContent = `Room ID: ${data.roomId}`;
@@ -165,7 +203,7 @@ ws.onmessage = (event) => {
         console.log("Game launched:", {
           currentPlayer: data.currentPlayer,
           isPlayerTurn,
-          currentPseudo
+          currentPseudo,
         });
       }
       break;
@@ -176,66 +214,116 @@ ws.onmessage = (event) => {
       break;
 
     case "card-flipped":
-      // Mise à jour de l'affichage de la carte retournée
       updateFlippedCard(data.cardId, data.image, data.value);
-      
-      // Mise à jour éventuelle d'autres informations (par exemple, le nombre de cartes retournées)
-      const playerElement = document.querySelector(`[data-pseudo='${data.pseudo}']`);
-      if (playerElement) {
-        playerElement.dataset.chooseCard = data.chooseCard;
-      }
-      console.log(`Player ${data.pseudo} a retourné ${data.chooseCard} carte(s).`);
-      
-      // Mettre à jour les mains affichées et les points
       displayPlayersHands(data.players);
       appendMessage(`${data.pseudo} a retourné une carte`);
+      break;
 
-      // Pour le joueur local, si toutes les cartes sont visibles, on déclenche le dernier tour.
-      if (data.pseudo === currentPseudo && !lastRoundTriggered && isLocalHandFullyVisible()) {
-        console.log("Tous les éléments de la main sont visibles, déclenchement du dernier tour.");
-        ws.send(JSON.stringify({
-            type: "last-round-trigger",
-            pseudo: currentPseudo
-        }));
-        lastRoundTriggered = true;
-        appendMessage("Dernier tour déclenché !");
-      }
+    case "last-round-trigger":
+      appendMessage(data.message);
       break;
 
     case "turn-ended":
-      appendMessage(`Player ${data.player} has ended their turn.`);
+      appendMessage(`${data.player} a terminé son tour.`);
+
+      // Retourner toutes les cartes du joueur qui vient de terminer son tour
+      const endedPlayer = data.players.find(
+        (player) => player.pseudo === data.player
+      );
+      if (endedPlayer) {
+        endedPlayer.hand.forEach((card) => {
+          card.visible = true; // Retourner la carte
+        });
+
+        // Calculer le score
+        // const score = calculatePoints(endedPlayer.hand);
+        // appendMessage(
+        //   `${data.player} a retourné toutes ses cartes et a obtenu ${score} points !`
+        // );
+
+        // // Informer tous les joueurs
+        // data.players.forEach((player) => {
+        //   if (player.pseudo !== data.player) {
+        //     appendMessage(
+        //       `${data.player} a retourné toutes ses cartes et a obtenu ${score} points !`
+        //     );
+        //   }
+        // });
+      }
+
+      // Passer au joueur suivant
+      const nextPlayerIndex =
+        (data.players.findIndex((player) => player.pseudo === data.player) +
+          1) %
+        data.players.length;
+      const nextPlayer = data.players[nextPlayerIndex];
+
+      // Informer le prochain joueur que c'est son tour
+      if (nextPlayer) {
+        appendMessage(`C'est le tour de ${nextPlayer.pseudo}.`);
+        // Mettre à jour l'affichage du tour
+        updateTurnDisplay(nextPlayer.pseudo);
+      }
       break;
 
     case "next-turn":
       currentTurnPlayer = data.currentPlayer;
-      isPlayerTurn = (currentPseudo === data.currentPlayer);
+      isPlayerTurn = currentPseudo === data.currentPlayer;
+
       // Réinitialiser l'état pour le nouveau tour
       isCardDrawn = false;
       drawnCard = null;
       hasDiscarded = false;
       drawSource = null;
-      // appendMessage(`Tour suivant: ${data.currentPlayer}`);
+
+      // Retourner toutes les cartes du joueur
+      if (isPlayerTurn) {
+        const playerHand = data.players.find(
+          (player) => player.pseudo === currentPseudo
+        ).hand;
+        playerHand.forEach((card) => {
+          if (!card.visible) {
+            card.visible = true; // Retourner la carte
+          }
+        });
+
+        // Calculer le score
+        // const score = calculatePoints(playerHand);
+        // appendMessage(
+        //   `${currentPseudo} a retourné toutes ses cartes et a obtenu ${score} points !`
+        // );
+
+        // // Informer tous les joueurs
+        // data.players.forEach((player) => {
+        //   if (player.pseudo !== currentPseudo) {
+        //     appendMessage(
+        //       `${currentPseudo} a retourné toutes ses cartes et a obtenu ${score} points !`
+        //     );
+        //   }
+        // });
+      }
+
       updateTurnDisplay(data.currentPlayer);
       updateAvailableActions();
       break;
 
     case "card-drawn":
-      drawnCardDisplay.innerHTML = '';
+      drawnCardDisplay.innerHTML = "";
       const cardImg = document.createElement("img");
       cardImg.src = data.card.image;
       cardImg.classList.add("card", "rounded");
       drawnCardDisplay.appendChild(cardImg);
       drawnCardDisplay.style.display = "block";
-      
+
       if (data.player === currentPseudo) {
         drawnCard = data.card;
         isCardDrawn = true;
-        drawSource = 'deck';
+        drawSource = "deck";
         appendMessage(`Vous avez pioché un ${data.card.value}`);
       } else {
         appendMessage(`${data.player} a pioché un ${data.card.value}`);
       }
-      
+
       updateAvailableActions();
       break;
 
@@ -251,7 +339,7 @@ ws.onmessage = (event) => {
       isCardDrawn = false;
       drawnCard = null;
       drawnCardDisplay.style.display = "none";
-      appendMessage(`${data.player} a remplacé une carte.`);
+      appendMessage(`${data.pseudo} a remplacé une carte.`);
       break;
 
     case "drawn-card-discarded":
@@ -267,14 +355,14 @@ ws.onmessage = (event) => {
     case "card-drawn-from-discard":
       drawnCard = data.card;
       isCardDrawn = true;
-      drawSource = 'discard';
-      drawnCardDisplay.innerHTML = '';
+      drawSource = "discard";
+      drawnCardDisplay.innerHTML = "";
       const discardCardImg = document.createElement("img");
       discardCardImg.src = data.card.image;
       discardCardImg.classList.add("card", "rounded");
       drawnCardDisplay.appendChild(discardCardImg);
       drawnCardDisplay.style.display = "block";
-      
+
       if (data.player === currentPseudo) {
         appendMessage("Vous avez pioché une carte de la défausse");
       } else {
@@ -293,8 +381,7 @@ ws.onmessage = (event) => {
 
     // Le serveur indique que c'est le dernier tour (le joueur qui déclenche son dernier retournement a lancé cette étape)
     case "last-round":
-      isLastRound = true;
-      appendMessage("C'est le dernier tour !");
+      appendMessage(data.message);
       break;
 
     // Une fois le dernier tour terminé, le serveur envoie l'issue de la partie
@@ -317,17 +404,19 @@ ws.onmessage = (event) => {
 
 function drawCard() {
   if (!isPlayerTurn || isCardDrawn) return;
-  
+
   ws.send(JSON.stringify({ type: "draw-card" }));
 }
 
 function drawFromDiscard() {
   if (!isPlayerTurn || isCardDrawn) return;
-  
-  ws.send(JSON.stringify({ 
-    type: "draw-from-discard",
-    pseudo: currentPseudo
-  }));
+
+  ws.send(
+    JSON.stringify({
+      type: "draw-from-discard",
+      pseudo: currentPseudo,
+    })
+  );
 }
 
 function discardCard(card) {
@@ -408,42 +497,56 @@ function appendMessage(message) {
 }
 
 function displayPlayersHands(players) {
+  if (!players || !Array.isArray(players)) {
+    // console.error("Invalid players data:", players);
+    return;
+  }
+
   playersHandsDiv.innerHTML = "";
   players.forEach((player) => {
+    if (!player || !player.hand || !Array.isArray(player.hand)) {
+      console.error("Invalid player data:", player);
+      return;
+    }
+
+    // Log pour vérifier les données du joueur
+    console.log(`Displaying hand for ${player.pseudo}:`, player.hand);
+
     const playerDiv = document.createElement("div");
     playerDiv.className = "hand";
-    // On identifie la main par le pseudo du joueur
     playerDiv.dataset.pseudo = player.pseudo;
-    
-    // Pour les mains des adversaires, on ajoute toujours la classe "dim"
+
     if (player.pseudo !== currentPseudo) {
       playerDiv.classList.add("dim");
     }
-    
+
     const playerInfoDiv = document.createElement("div");
     playerInfoDiv.className = "player-info";
-    
+
     const playerName = document.createElement("h3");
     playerName.textContent = player.pseudo;
     playerName.dataset.pseudo = player.pseudo;
-    
-    // Ici, vous pouvez conserver le coloriage des pseudos selon vos critères
+
     if (gameLaunched) {
       if (player.pseudo === currentPseudo) {
         playerName.style.color = isPlayerTurn ? "#27ae60" : "#c0392b";
       } else {
-        playerName.style.color = isPlayerTurn ? "#c0392b" : (player.pseudo === currentTurnPlayer ? "#27ae60" : "#c0392b");
+        playerName.style.color = isPlayerTurn
+          ? "#c0392b"
+          : player.pseudo === currentTurnPlayer
+          ? "#27ae60"
+          : "#c0392b";
       }
     } else {
       playerName.style.color = "#666";
     }
-    
+
     const points = calculatePoints(player.hand);
     const pointsDisplay = document.createElement("span");
     pointsDisplay.className = "points-display";
     pointsDisplay.textContent = `Points : ${points}`;
     pointsDisplay.style.marginLeft = "20px";
-    
+
     playerInfoDiv.appendChild(playerName);
     playerInfoDiv.appendChild(pointsDisplay);
     playerDiv.appendChild(playerInfoDiv);
@@ -451,36 +554,38 @@ function displayPlayersHands(players) {
     const deckContainer = document.createElement("div");
     deckContainer.className = "deck-row";
 
-    // Création de la grille de cartes (colonnes et lignes)
-    const cardGrid = Array(4).fill().map(() => Array(3).fill(null));
+    const cardGrid = Array(4)
+      .fill()
+      .map(() => Array(3).fill(null));
     player.hand.forEach((card, index) => {
       const col = Math.floor(index / 3);
       const row = index % 3;
       cardGrid[col][row] = card;
     });
 
-    // Pour chaque colonne
     for (let col = 0; col < 4; col++) {
       const column = document.createElement("div");
       column.className = "deck-column";
-      
-      // Vérifier la complétude de la colonne
+
       const columnCards = cardGrid[col];
-      const isColumnComplete = columnCards.every(card => 
-        card && 
-        card.visible && 
-        columnCards[0] && 
-        card.value === columnCards[0].value
+      const isColumnComplete = columnCards.every(
+        (card) =>
+          card &&
+          card.visible &&
+          columnCards[0] &&
+          card.value === columnCards[0].value
       );
-      const isAlreadyCompleted = columnCards.every(card => card && card.columnCompleted);
+      const isAlreadyCompleted = columnCards.every(
+        (card) => card && card.columnCompleted
+      );
 
       for (let row = 0; row < 3; row++) {
-        const card = cardGrid[col][row];
+        const card = columnCards[row];
         if (card) {
           const cardImg = document.createElement("img");
           cardImg.classList.add("card", "rounded");
           cardImg.src = card.visible ? card.image : "/images/back.png";
-          
+
           cardImg.dataset.image = card.image;
           cardImg.dataset.value = card.value;
           cardImg.dataset.visible = card.visible;
@@ -500,14 +605,22 @@ function displayPlayersHands(players) {
         }
       }
 
-      if (isColumnComplete && !isAlreadyCompleted && player.pseudo === currentPseudo) {
-        ws.send(JSON.stringify({
-          type: "column-completed",
-          column: col,
-          value: columnCards[0].value,
-          pseudo: player.pseudo
-        }));
-        appendLog(`Colonne ${col + 1} complétée avec trois ${columnCards[0].value}!`);
+      if (
+        isColumnComplete &&
+        !isAlreadyCompleted &&
+        player.pseudo === currentPseudo
+      ) {
+        ws.send(
+          JSON.stringify({
+            type: "column-completed",
+            column: col,
+            value: columnCards[0].value,
+            pseudo: player.pseudo,
+          })
+        );
+        appendLog(
+          `Colonne ${col + 1} complétée avec trois ${columnCards[0].value}!`
+        );
       }
 
       deckContainer.appendChild(column);
@@ -523,60 +636,81 @@ function flipCard(event) {
   const visible = card.dataset.visible === "true";
   const owner = card.dataset.owner;
 
-  appendLog(`Carte cliquée - Phase: ${gameLaunched ? "jeu" : "initiale"}, Propriétaire: ${owner}`);
+  appendLog(
+    `Carte cliquée - Phase: ${
+      gameLaunched ? "jeu" : "initiale"
+    }, Propriétaire: ${owner}`
+  );
 
   if (owner !== currentPseudo) {
     appendLog("Ce n'est pas votre carte");
     return;
   }
 
-  const playerElement = document.querySelector(`[data-pseudo='${currentPseudo}']`);
+  const playerElement = document.querySelector(
+    `[data-pseudo='${currentPseudo}']`
+  );
   let chooseCard = parseInt(playerElement.dataset.chooseCard || 0);
 
+  // Vérification du nombre de cartes retournées avant le début du jeu
   if (!gameLaunched) {
     if (chooseCard >= 2 || visible) {
       appendLog("Impossible de retourner plus de cartes en phase initiale");
       return;
     }
-    
-    ws.send(JSON.stringify({
-      type: "flip-card",
-      cardId: card.dataset.id,
-      image: card.dataset.image,
-      value: card.dataset.value,
-      pseudo: currentPseudo,
-      chooseCard: chooseCard + 1
-    }));
-  } 
-  else {
+
+    ws.send(
+      JSON.stringify({
+        type: "flip-card",
+        cardId: card.dataset.id,
+        image: card.dataset.image,
+        value: card.dataset.value,
+        pseudo: currentPseudo,
+        chooseCard: chooseCard + 1,
+      })
+    );
+  } else {
     if (!isPlayerTurn) {
       appendLog("Ce n'est pas votre tour");
       return;
     }
 
-    if (drawSource === 'deck' && !isCardDrawn && !drawnCard && !hasDiscarded) {
+    if (drawSource === "deck" && !isCardDrawn && !drawnCard && !hasDiscarded) {
       appendLog("Vous devez d'abord piocher une carte !");
       appendMessage("Vous devez d'abord piocher une carte !");
       return;
     }
 
+    // Vérification du nombre de cartes retournées pendant le jeu
+    const flippedCards = playerElement.querySelectorAll(
+      "img[data-visible='true']"
+    ).length;
+    if (flippedCards >= 2) {
+      appendLog("Impossible de retourner plus de 2 cartes pendant le jeu");
+      return;
+    }
+
     if (drawnCard) {
       appendLog("Remplacement de la carte par celle piochée");
-      ws.send(JSON.stringify({
-        type: "replace-card",
-        oldCardId: card.dataset.id,
-        newCard: drawnCard,
-        pseudo: currentPseudo
-      }));
-    } else if (!visible && (hasDiscarded || drawSource === 'deck')) {
+      ws.send(
+        JSON.stringify({
+          type: "replace-card",
+          oldCardId: card.dataset.id,
+          newCard: drawnCard,
+          pseudo: currentPseudo,
+        })
+      );
+    } else if (!visible && (hasDiscarded || drawSource === "deck")) {
       appendLog("Retournement de carte après défausse");
-      ws.send(JSON.stringify({
-        type: "flip-card",
-        cardId: card.dataset.id,
-        image: card.dataset.image,
-        value: card.dataset.value,
-        pseudo: currentPseudo
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "flip-card",
+          cardId: card.dataset.id,
+          image: card.dataset.image,
+          value: card.dataset.value,
+          pseudo: currentPseudo,
+        })
+      );
     }
   }
 
@@ -592,7 +726,9 @@ function updateFlippedCard(cardId, image, value) {
     // Mettre à jour l'attribut data-visible pour indiquer que la carte est maintenant visible
     cardImg.dataset.visible = "true";
     cardImg.dataset.value = value;
-    console.log(`Carte ${cardId} retournée, data-visible réglé à ${cardImg.dataset.visible}`);
+    console.log(
+      `Carte ${cardId} retournée, data-visible réglé à ${cardImg.dataset.visible}`
+    );
   }
 }
 
@@ -600,7 +736,8 @@ function updateTurnDisplay(currentPlayer) {
   const turnInfo = document.getElementById("turn-info");
   turnInfo.textContent = `C'est le tour de ${currentPlayer}`;
   turnInfo.style.padding = "10px";
-  turnInfo.style.backgroundColor = currentPlayer === currentPseudo ? "#27ae60" : "#c0392b";
+  turnInfo.style.backgroundColor =
+    currentPlayer === currentPseudo ? "#27ae60" : "#c0392b";
   turnInfo.style.color = "#fff";
   turnInfo.style.borderRadius = "5px";
   turnInfo.style.textAlign = "center";
@@ -618,7 +755,7 @@ function nextTurn() {
 }
 
 // Mettre à jour le style CSS
-const style = document.createElement('style');
+const style = document.createElement("style");
 style.textContent = `
   .drawn-card {
     position: fixed;
@@ -639,55 +776,64 @@ style.textContent = `
 document.head.appendChild(style);
 
 function updateAvailableActions() {
-  const deckElement = document.getElementById('deck');
-  const discardPileElement = document.getElementById('discard-pile');
+  const deckElement = document.getElementById("deck");
+  const discardPileElement = document.getElementById("discard-pile");
   // On sélectionne uniquement la main du joueur local
-  const localHandElement = document.querySelector('#players-hands .hand[data-pseudo="' + currentPseudo + '"]');
+  const localHandElement = document.querySelector(
+    '#players-hands .hand[data-pseudo="' + currentPseudo + '"]'
+  );
 
-  console.log("updateAvailableActions:", { isPlayerTurn, isCardDrawn, hasDiscarded, drawSource });
+  console.log("updateAvailableActions:", {
+    isPlayerTurn,
+    isCardDrawn,
+    hasDiscarded,
+    drawSource,
+  });
 
   if (!isPlayerTurn) {
     // Ce n'est pas votre tour : tout reste assombri.
-    deckElement.classList.add('dim');
-    discardPileElement.classList.add('dim');
-    if (localHandElement) localHandElement.classList.add('dim');
+    deckElement.classList.add("dim");
+    discardPileElement.classList.add("dim");
+    if (localHandElement) localHandElement.classList.add("dim");
   } else {
     // C'est votre tour
     if (!isCardDrawn && !hasDiscarded) {
       // Au début du tour, aucune carte n'a été piochée :
       // La pioche et la défausse sont actives, la main est assombrie.
-      deckElement.classList.remove('dim');
-      discardPileElement.classList.remove('dim');
-      if (localHandElement) localHandElement.classList.add('dim');
+      deckElement.classList.remove("dim");
+      discardPileElement.classList.remove("dim");
+      if (localHandElement) localHandElement.classList.add("dim");
     } else if (isCardDrawn) {
       // Une carte vient d'être piochée et n'est pas encore défaussée.
-      deckElement.classList.add('dim'); // On interdit de repiocher.
+      deckElement.classList.add("dim"); // On interdit de repiocher.
       // Si la carte provient du deck, la défausse reste active (pour pouvoir défausser).
-      if (drawSource === 'deck') {
-          discardPileElement.classList.remove('dim');
-      } else if (drawSource === 'discard') {
-          // Si la pioche était depuis la défausse, la zone défausse reste assombrie.
-          discardPileElement.classList.add('dim');
+      if (drawSource === "deck") {
+        discardPileElement.classList.remove("dim");
+      } else if (drawSource === "discard") {
+        // Si la pioche était depuis la défausse, la zone défausse reste assombrie.
+        discardPileElement.classList.add("dim");
       }
-      if (localHandElement) localHandElement.classList.remove('dim');
+      if (localHandElement) localHandElement.classList.remove("dim");
     } else if (!isCardDrawn && hasDiscarded) {
       // La carte piochée depuis le deck a été défaussée.
       // Les zones de pioche deviennent assombries et seule la main est active.
-      deckElement.classList.add('dim');
-      discardPileElement.classList.add('dim');
-      if (localHandElement) localHandElement.classList.remove('dim');
+      deckElement.classList.add("dim");
+      discardPileElement.classList.add("dim");
+      if (localHandElement) localHandElement.classList.remove("dim");
     }
   }
 }
 
 // Fonction qui vérifie si la main locale contient uniquement des cartes visibles.
 function isLocalHandFullyVisible() {
-  const localHandElement = document.querySelector(`#players-hands .hand[data-pseudo="${currentPseudo}"]`);
+  const localHandElement = document.querySelector(
+    `#players-hands .hand[data-pseudo="${currentPseudo}"]`
+  );
   if (!localHandElement) return false;
   const cards = localHandElement.querySelectorAll("img.card");
-  
+
   // Affichage pour le debug
-  cards.forEach(card => {
+  cards.forEach((card) => {
     console.log(`Carte ${card.dataset.id} visible: ${card.dataset.visible}`);
   });
 
@@ -702,7 +848,7 @@ function isLocalHandFullyVisible() {
 
 // Fonction pour afficher le gros popup final annonçant le gagnant et les scores
 function showGameOverPopup(winner, playersResults) {
-  const popup = document.createElement('div');
+  const popup = document.createElement("div");
   popup.className = "game-over-popup";
   popup.style.position = "fixed";
   popup.style.top = "50%";
@@ -720,19 +866,41 @@ function showGameOverPopup(winner, playersResults) {
   content += `<h2>Le gagnant est ${winner} !</h2>`;
   content += `<h3>Résultats :</h3>`;
   content += `<ul style="list-style: none; padding: 0;">`;
-  playersResults.forEach(player => {
-    content += `<li>${player.pseudo} : ${player.points} points</li>`;
+  playersResults.forEach((player) => {
+    content += `<li>${player.pseudo} : ${player.score} points</li>`;
   });
   content += `</ul>`;
-  popup.innerHTML = content;
-  
-  document.body.appendChild(popup);
 
   // On peut ajouter un bouton pour redémarrer la partie ou pour fermer le popup
-  setTimeout(() => {
-    popup.style.transition = "opacity 0.5s ease-out";
-    popup.style.opacity = "0";
-    setTimeout(() => popup.remove(), 500);
-  }, 5000);
-}
+  // setTimeout(() => {
+  //   popup.style.transition = "opacity 0.5s ease-out";
+  //   popup.style.opacity = "0";
+  //   setTimeout(() => popup.remove(), 500);
+  // }, 10000);
 
+  // Ajout du bouton pour redémarrer la partie
+  const restartButton = document.createElement("button");
+  restartButton.innerText = "Redémarrer la partie";
+  restartButton.style.marginTop = "20px";
+  restartButton.style.padding = "10px 20px";
+  restartButton.style.backgroundColor = "#e74c3c";
+  restartButton.style.color = "#fff";
+  restartButton.style.border = "none";
+  restartButton.style.borderRadius = "5px";
+  restartButton.style.cursor = "pointer";
+
+  // Ajout de l'événement pour redémarrer la partie
+  restartButton.onclick = () => {
+    // Logique pour redémarrer la partie
+    // Vous pouvez appeler une fonction ici pour réinitialiser le jeu
+    console.log("Partie redémarrée !");
+    popup.remove(); // Ferme le popup après avoir cliqué sur le bouton
+    // Appeler une fonction pour réinitialiser le jeu
+    // restartGame(); // Assurez-vous d'avoir cette fonction définie
+  };
+
+  popup.appendChild(restartButton);
+  popup.innerHTML += content; // Ajoutez le contenu après le bouton
+
+  document.body.appendChild(popup);
+}
