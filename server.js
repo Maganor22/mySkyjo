@@ -234,18 +234,6 @@ wss.on("connection", (ws) => {
               (card) => card.id === data.cardId
             );
             if (cardIndex !== -1) {
-              // Vérifiez si le joueur a déjà retourné 2 cartes
-              if (!rooms[flipRoomId].gameStarted && player.chooseCard >= 2) {
-                ws.send(
-                  JSON.stringify({
-                    type: "error",
-                    message:
-                      "Vous ne pouvez pas retourner plus de 2 cartes avant le début du jeu.",
-                  })
-                );
-                return; // Sortir de la fonction si la condition n'est pas respectée
-              }
-
               player.hand[cardIndex].visible = true;
 
               // Log pour vérifier l'état des cartes après le retournement
@@ -648,7 +636,7 @@ wss.on("connection", (ws) => {
         break;
 
       case "game-launched":
-        // console.log("Game launched !");
+        console.log("Game launched !");
         gameLaunched = true;
         break;
 
@@ -740,9 +728,9 @@ wss.on("connection", (ws) => {
                 id: `completed-${Date.now()}`, // Ajouter un ID unique
               });
 
-              // console.log(
-              //   `Colonne complétée avec la valeur ${columnCards[0].value}`
-              // );
+              console.log(
+                `Colonne complétée avec la valeur ${columnCards[0].value}`
+              );
 
               // Informer tous les joueurs
               rooms[columnRoomId].players.forEach((p) => {

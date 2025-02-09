@@ -652,7 +652,6 @@ function flipCard(event) {
   );
   let chooseCard = parseInt(playerElement.dataset.chooseCard || 0);
 
-  // Vérification du nombre de cartes retournées avant le début du jeu
   if (!gameLaunched) {
     if (chooseCard >= 2 || visible) {
       appendLog("Impossible de retourner plus de cartes en phase initiale");
@@ -678,15 +677,6 @@ function flipCard(event) {
     if (drawSource === "deck" && !isCardDrawn && !drawnCard && !hasDiscarded) {
       appendLog("Vous devez d'abord piocher une carte !");
       appendMessage("Vous devez d'abord piocher une carte !");
-      return;
-    }
-
-    // Vérification du nombre de cartes retournées pendant le jeu
-    const flippedCards = playerElement.querySelectorAll(
-      "img[data-visible='true']"
-    ).length;
-    if (flippedCards >= 2) {
-      appendLog("Impossible de retourner plus de 2 cartes pendant le jeu");
       return;
     }
 
