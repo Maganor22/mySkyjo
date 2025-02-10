@@ -19,6 +19,7 @@ let hasDiscarded = false;
 let drawSource = null; // 'deck' ou 'discard'
 let lastRoundTriggered = false;
 let isLastRound = false;
+let chooseCardCount = 0;
 
 const cardPioche = document.createElement("img");
 cardPioche.classList.add("card_pioche", "cursor_pointer", "rounded");
@@ -160,6 +161,15 @@ ws.onmessage = (event) => {
       roomInfo.textContent = `Room ID: ${data.roomId}`;
       roomControls.style.display = "none";
       gameControls.style.display = "block";
+      roomInfo.innerHTML = `
+    Room ID: <input type="text" id="roomIdInput" value="${data.roomId}" readonly />
+    <button id="copyRoomIdButton" onclick="copyRoomId()">Copier</button>
+  `;
+
+      // Assurez-vous que l'input est mis à jour après l'ajout au DOM
+      const roomIdInput = document.getElementById("roomIdInput");
+      roomIdInput.value = data.roomId; // Assigner la valeur ici
+
       appendMessage(`Salle créée – Room ID: ${data.roomId}`);
       break;
 
@@ -423,6 +433,30 @@ function discardCard(card) {
   ws.send(JSON.stringify({ type: "discard-card", card }));
 }
 
+function copyRoomId() {
+  const roomIdInput = document.getElementById("roomIdInput");
+
+  if (!roomIdInput) {
+    console.error("L'élément avec l'ID roomIdInput n'existe pas.");
+    return;
+  }
+
+  roomIdInput.select();
+  roomIdInput.setSelectionRange(0, 99999); // Pour les appareils mobiles
+
+  const roomIdValue = roomIdInput.value;
+  console.log("Valeur de roomIdInput :", roomIdValue); // Vérifiez la valeur dans la console
+
+  navigator.clipboard
+    .writeText(roomIdValue)
+    .then(() => {
+      appendMessage(`ID de la salle copié ! ${roomIdValue}`);
+    })
+    .catch((err) => {
+      console.error("Erreur lors de la copie : ", err);
+    });
+}
+
 function displayGameArea(deckSize, discardPile = []) {
   if (deckSize > 0) {
     cardPioche.src = "/images/back.png";
@@ -498,7 +532,6 @@ function appendMessage(message) {
 
 function displayPlayersHands(players) {
   if (!players || !Array.isArray(players)) {
-    // console.error("Invalid players data:", players);
     return;
   }
 
@@ -509,12 +542,10 @@ function displayPlayersHands(players) {
       return;
     }
 
-    // Log pour vérifier les données du joueur
-    console.log(`Displaying hand for ${player.pseudo}:`, player.hand);
-
     const playerDiv = document.createElement("div");
     playerDiv.className = "hand";
     playerDiv.dataset.pseudo = player.pseudo;
+    playerDiv.dataset.chooseCard = 0; // Initialiser ici
 
     if (player.pseudo !== currentPseudo) {
       playerDiv.classList.add("dim");
@@ -632,31 +663,41 @@ function displayPlayersHands(players) {
 }
 
 function flipCard(event) {
+  console.log("FLIP CARD");
   const card = event.target;
   const visible = card.dataset.visible === "true";
   const owner = card.dataset.owner;
 
-  appendLog(
+  // Récupérer l'élément du joueur
+  const playerElement = document.querySelector(
+    `[data-pseudo='${currentPseudo}']`
+  );
+
+  // Vérifiez si playerElement est valide
+  if (!playerElement) {
+    console.log("playerElement est introuvable.");
+    return; // Sortir si l'élément n'est pas trouvé
+  }
+
+  console.log(
     `Carte cliquée - Phase: ${
       gameLaunched ? "jeu" : "initiale"
     }, Propriétaire: ${owner}`
   );
 
   if (owner !== currentPseudo) {
-    appendLog("Ce n'est pas votre carte");
+    console.log("Ce n'est pas votre carte");
     return;
   }
 
-  const playerElement = document.querySelector(
-    `[data-pseudo='${currentPseudo}']`
-  );
-  let chooseCard = parseInt(playerElement.dataset.chooseCard || 0);
-
   if (!gameLaunched) {
-    if (chooseCard >= 2 || visible) {
-      appendLog("Impossible de retourner plus de cartes en phase initiale");
+    console.log("Phase initiale");
+    if (chooseCardCount >= 2 || visible) {
+      console.log("Impossible de retourner plus de cartes en phase initiale");
       return;
     }
+
+    chooseCardCount++;
 
     ws.send(
       JSON.stringify({
@@ -665,23 +706,27 @@ function flipCard(event) {
         image: card.dataset.image,
         value: card.dataset.value,
         pseudo: currentPseudo,
-        chooseCard: chooseCard + 1,
+        chooseCard: chooseCardCount,
       })
     );
+
+    // Mettre à jour l'état de la carte
+    card.src = card.dataset.image;
+    card.dataset.visible = "true";
   } else {
     if (!isPlayerTurn) {
-      appendLog("Ce n'est pas votre tour");
+      console.log("Ce n'est pas votre tour");
       return;
     }
 
     if (drawSource === "deck" && !isCardDrawn && !drawnCard && !hasDiscarded) {
-      appendLog("Vous devez d'abord piocher une carte !");
+      console.log("Vous devez d'abord piocher une carte !");
       appendMessage("Vous devez d'abord piocher une carte !");
       return;
     }
 
     if (drawnCard) {
-      appendLog("Remplacement de la carte par celle piochée");
+      console.log("Remplacement de la carte par celle piochée");
       ws.send(
         JSON.stringify({
           type: "replace-card",
@@ -691,7 +736,7 @@ function flipCard(event) {
         })
       );
     } else if (!visible && (hasDiscarded || drawSource === "deck")) {
-      appendLog("Retournement de carte après défausse");
+      console.log("Retournement de carte après défausse");
       ws.send(
         JSON.stringify({
           type: "flip-card",
@@ -701,11 +746,12 @@ function flipCard(event) {
           pseudo: currentPseudo,
         })
       );
+
+      // Mettre à jour l'état de la carte
+      card.src = card.dataset.image;
+      card.dataset.visible = "true";
     }
   }
-
-  card.src = card.dataset.image;
-  card.dataset.visible = "true";
 }
 
 function updateFlippedCard(cardId, image, value) {
@@ -716,9 +762,9 @@ function updateFlippedCard(cardId, image, value) {
     // Mettre à jour l'attribut data-visible pour indiquer que la carte est maintenant visible
     cardImg.dataset.visible = "true";
     cardImg.dataset.value = value;
-    console.log(
-      `Carte ${cardId} retournée, data-visible réglé à ${cardImg.dataset.visible}`
-    );
+    // console.log(
+    //   `Carte ${cardId} retournée, data-visible réglé à ${cardImg.dataset.visible}`
+    // );
   }
 }
 

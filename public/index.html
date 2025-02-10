@@ -16,26 +16,32 @@
       </div>
       <div id="players-hands"></div>
     </div>
-    <div id="room-controls">
+    <div id="room-controls" class="controls">
       <input
         type="text"
         id="pseudoInput"
-        placeholder="Enter your pseudo"
+        placeholder="Entrez votre pseudo"
         value="Maga"
       />
-      <button onclick="createRoom()">Create Room</button>
-      <input type="text" id="roomIdInput" placeholder="Room ID" />
-      <button onclick="joinRoom()">Join Room</button>
+      <button onclick="createRoom()">Créer une salle</button>
+      <input type="text" id="roomIdInput" placeholder="ID de la salle" />
+      <button onclick="joinRoom()">Rejoindre la salle</button>
     </div>
     <div id="game-controls" style="display: none">
       <div id="room-info"></div>
       <div id="chat"></div>
-      <input type="text" id="message" />
-      <button onclick="sendMessage()">Send</button>
-      <button id="startButton" onclick="startGame()">Start Game</button>
+      <input type="text" id="message" placeholder="Votre message..." />
+      <button onclick="sendMessage()">Envoyer</button>
+      <button id="startButton" onclick="startGame()">Démarrer le jeu</button>
     </div>
 
     <script src="./js/client.js"></script>
-    <script></script>
+    <script>
+      generateRandomPseudo();
+      function generateRandomPseudo() {
+        const randomPseudo = "User" + Math.floor(Math.random() * 1000);
+        document.getElementById("pseudoInput").value = randomPseudo;
+      }
+    </script>
   </body>
 </html>

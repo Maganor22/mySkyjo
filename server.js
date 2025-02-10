@@ -234,15 +234,19 @@ wss.on("connection", (ws) => {
               (card) => card.id === data.cardId
             );
             if (cardIndex !== -1) {
-              player.hand[cardIndex].visible = true;
+              // Vérifiez si le joueur a déjà retourné 2 cartes
+              if (player.chooseCard >= 2) {
+                ws.send(
+                  JSON.stringify({
+                    type: "error",
+                    message: "Vous ne pouvez pas retourner plus de 2 cartes.",
+                  })
+                );
+                break; // Sortir si le joueur a déjà retourné 2 cartes
+              }
 
-              // Log pour vérifier l'état des cartes après le retournement
-              // console.log(
-              //   `Player ${data.pseudo} flipped a card. Current hand state:`
-              // );
-              // player.hand.forEach((card, index) => {
-              //   console.log(`Card ${index + 1}: visible = ${card.visible}`);
-              // });
+              player.hand[cardIndex].visible = true;
+              player.chooseCard++; // Incrémenter le nombre de cartes retournées
 
               // Informer tous les joueurs du retournement
               rooms[flipRoomId].players.forEach((p) => {
@@ -253,7 +257,7 @@ wss.on("connection", (ws) => {
                       cardId: data.cardId,
                       image: data.image,
                       value: data.value,
-                      pseudo: data.pseudo, // Assurez-vous que le pseudo est correctement envoyé
+                      pseudo: data.pseudo,
                       players: rooms[flipRoomId].players.map((pl) => ({
                         pseudo: pl.pseudo,
                         hand: pl.hand,
@@ -265,16 +269,14 @@ wss.on("connection", (ws) => {
 
               // Vérifier si c'est la phase initiale
               if (!rooms[flipRoomId].gameStarted) {
-                player.chooseCard = (player.chooseCard || 0) + 1;
-
                 // Vérifier si tous les joueurs ont retourné leurs 2 cartes
                 const allPlayersReady = rooms[flipRoomId].players.every(
                   (p) => p.chooseCard >= 2
                 );
 
                 if (allPlayersReady) {
-                  rooms[flipRoomId].gameStarted = true;
-                  rooms[flipRoomId].currentTurn = 0;
+                  rooms[flipRoomId].gameStarted = true; // Démarrer le jeu
+                  rooms[flipRoomId].currentTurn = 0; // Réinitialiser le tour
                   const firstPlayer = rooms[flipRoomId].players[0];
 
                   rooms[flipRoomId].players.forEach((p) => {
@@ -295,95 +297,6 @@ wss.on("connection", (ws) => {
                     }
                   });
                 }
-              } else {
-                // Phase de jeu : vérifier si toutes les cartes du joueur sont visibles
-                const allCardsFlipped = areAllCardsFlipped(player);
-                // console.log(
-                //   `All cards flipped for ${data.pseudo}: ${allCardsFlipped}`
-                // );
-
-                if (allCardsFlipped && !rooms[flipRoomId].lastRoundTriggered) {
-                  // console.log(`Sending last-round-trigger for ${data.pseudo}`);
-                  rooms[flipRoomId].lastRoundTriggered = true;
-                  rooms[flipRoomId].players.forEach((p) => {
-                    if (p.ws.readyState === WebSocket.OPEN) {
-                      p.ws.send(
-                        JSON.stringify({
-                          type: "last-round-trigger",
-                          message: `${data.pseudo} a retourné toutes ses cartes, c'est le dernier tour !`,
-                        })
-                      );
-                    }
-                  });
-                }
-
-                // Si le dernier tour a été déclenché, retourner automatiquement les cartes restantes
-                if (rooms[flipRoomId].lastRoundTriggered) {
-                  player.hand.forEach((card) => {
-                    if (!card.visible) {
-                      card.visible = true;
-                    }
-                  });
-
-                  // Vérifier si tous les joueurs ont fini de jouer
-                  const allPlayersFinished = rooms[flipRoomId].players.every(
-                    (p) => p.hand.every((card) => card.visible)
-                  );
-
-                  if (allPlayersFinished) {
-                    // Calculer le gagnant
-                    let winner = null;
-                    let lowestScore = Infinity;
-                    rooms[flipRoomId].players.forEach((p) => {
-                      const score = p.hand.reduce((total, card) => {
-                        return total + (card.value || 0);
-                      }, 0);
-
-                      // console.log(`Score for ${p.pseudo}: ${score}`); // Log pour déboguer
-
-                      // Trouver le joueur avec le score le plus bas
-                      if (score < lowestScore) {
-                        lowestScore = score;
-                        winner = p.pseudo;
-                      }
-                    });
-
-                    // Annoncer le gagnant
-                    rooms[flipRoomId].players.forEach((p) => {
-                      if (p.ws.readyState === WebSocket.OPEN) {
-                        const results = rooms[flipRoomId].players.map((pl) => {
-                          const hand = pl.hand || []; // Assurez-vous que la main est un tableau
-                          const score = hand.reduce((total, card) => {
-                            return total + (card.value || 0);
-                          }, 0);
-
-                          return {
-                            pseudo: pl.pseudo,
-                            score: score,
-                            hand: hand.map((card) => ({
-                              image: card.image,
-                              value: card.value,
-                              visible: card.visible,
-                              id: card.id,
-                            })), // Ajout des informations sur la main
-                          };
-                        });
-
-                        p.ws.send(
-                          JSON.stringify({
-                            type: "game-over",
-                            message: `Le gagnant est ${winner} avec un score de ${lowestScore} !`,
-                            winner: winner,
-                            results: results,
-                          })
-                        );
-                      }
-                    });
-                  }
-                }
-
-                // Passer au joueur suivant après le retournement de la carte
-                nextTurn(flipRoomId);
               }
             }
           }

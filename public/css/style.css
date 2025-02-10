@@ -18,8 +18,16 @@ body {
   margin-bottom: 10px;
 }
 
+.player-info>h3 {
+  margin-top: 0;
+  color: white;
+}
+
 .hand {
   margin-top: 10px;
+  background-color: #34495e;
+  padding: 1rem;
+  border-radius: 10px;
 }
 
 .card {
@@ -40,8 +48,8 @@ body {
 }
 
 #players-hands {
-    display: flex;
-    justify-content: space-evenly;
+  display: flex;
+  justify-content: space-evenly;
 }
 
 .darkMode {
@@ -56,6 +64,12 @@ body {
 #game-area {
   display: flex;
   justify-content: center;
+  width: max-content;
+  margin: 20px auto;
+  padding: 20px;
+  background-color: #34495e;
+  border-radius: 10px;
+  gap: 1rem;
 }
 
 .card_pioche,
@@ -76,4 +90,68 @@ body {
   opacity: 0.5;
   pointer-events: none;
   transition: opacity 0.3s;
+}
+
+h1 {
+  margin: 20px 0;
+  font-size: 2.5em;
+}
+
+.controls {
+  margin: 20px auto;
+  padding: 20px;
+  background-color: #34495e;
+  border-radius: 10px;
+  display: inline-block;
+}
+
+input[type="text"] {
+  padding: 10px;
+  margin: 5px;
+  border: none;
+  border-radius: 5px;
+  width: 200px;
+}
+
+button {
+  padding: 10px 15px;
+  margin: 5px;
+  border: none;
+  border-radius: 5px;
+  background-color: #27ae60;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+button:hover {
+  background-color: #219653;
+}
+
+#roomIdContainer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+#roomIdInput {
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  width: 200px;
+}
+
+#copyRoomIdButton {
+  padding: 10px 15px;
+  border: none;
+  border-radius: 5px;
+  background-color: #27ae60;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+#copyRoomIdButton:hover {
+  background-color: #219653;
 }
