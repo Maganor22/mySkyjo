@@ -132,7 +132,7 @@ function calculatePoints(hand) {
 
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
-  appendLog(`Message reçu: ${data.type}`);
+  console.log(`Message received by client: ${data.type}`);
   if (data.type === "game-over") {
     // Vérifiez que les résultats sont définis et sont un tableau
     if (!data.results || !Array.isArray(data.results)) {
@@ -234,7 +234,8 @@ ws.onmessage = (event) => {
       break;
 
     case "turn-ended":
-      appendMessage(`${data.player} a terminé son tour.`);
+      console.log(`${data.player} a terminé son tour.`);
+      // appendMessage(`${data.player} a terminé son tour.`);
 
       // Retourner toutes les cartes du joueur qui vient de terminer son tour
       const endedPlayer = data.players.find(
@@ -244,21 +245,6 @@ ws.onmessage = (event) => {
         endedPlayer.hand.forEach((card) => {
           card.visible = true; // Retourner la carte
         });
-
-        // Calculer le score
-        // const score = calculatePoints(endedPlayer.hand);
-        // appendMessage(
-        //   `${data.player} a retourné toutes ses cartes et a obtenu ${score} points !`
-        // );
-
-        // // Informer tous les joueurs
-        // data.players.forEach((player) => {
-        //   if (player.pseudo !== data.player) {
-        //     appendMessage(
-        //       `${data.player} a retourné toutes ses cartes et a obtenu ${score} points !`
-        //     );
-        //   }
-        // });
       }
 
       // Passer au joueur suivant
@@ -270,6 +256,7 @@ ws.onmessage = (event) => {
 
       // Informer le prochain joueur que c'est son tour
       if (nextPlayer) {
+        console.log(`C'est le tour de ${nextPlayer.pseudo}.`);
         appendMessage(`C'est le tour de ${nextPlayer.pseudo}.`);
         // Mettre à jour l'affichage du tour
         updateTurnDisplay(nextPlayer.pseudo);
@@ -277,6 +264,7 @@ ws.onmessage = (event) => {
       break;
 
     case "next-turn":
+      console.log(`Case next turn: ${data.currentPlayer}`);
       currentTurnPlayer = data.currentPlayer;
       isPlayerTurn = currentPseudo === data.currentPlayer;
 
@@ -296,21 +284,6 @@ ws.onmessage = (event) => {
             card.visible = true; // Retourner la carte
           }
         });
-
-        // Calculer le score
-        // const score = calculatePoints(playerHand);
-        // appendMessage(
-        //   `${currentPseudo} a retourné toutes ses cartes et a obtenu ${score} points !`
-        // );
-
-        // // Informer tous les joueurs
-        // data.players.forEach((player) => {
-        //   if (player.pseudo !== currentPseudo) {
-        //     appendMessage(
-        //       `${currentPseudo} a retourné toutes ses cartes et a obtenu ${score} points !`
-        //     );
-        //   }
-        // });
       }
 
       updateTurnDisplay(data.currentPlayer);
@@ -396,15 +369,22 @@ ws.onmessage = (event) => {
 
     // Une fois le dernier tour terminé, le serveur envoie l'issue de la partie
     case "game-over":
-      // Le serveur fournit dans data.players les mains complètes pour chaque joueur,
-      // éventuellement en mettant à jour les cartes cachées pour les révéler.
-      displayPlayersHands(data.players);
-      // data.winner est, par exemple, le pseudo du gagnant,
-      // data.results peut être un tableau indiquant pour chaque joueur le total des points.
-      showGameOverPopup(data.winner, data.results);
+      console.log("Game over received:", data);
+      if (data.results && Array.isArray(data.results)) {
+        displayPlayersHands(data.results);
+        showGameOverPopup(data.winner, data.results);
+      } else {
+        console.error("Invalid game-over data:", data);
+      }
+      break;
+
+    case "error":
+      console.error(`Error received: ${data.message}`);
+      appendMessage(`Error: ${data.message}`);
       break;
 
     default:
+      console.log(`Unknown message type received by client: ${data.type}`);
       if (data.type === "message") {
         appendMessage(data.message);
       }
@@ -531,22 +511,14 @@ function appendMessage(message) {
 }
 
 function displayPlayersHands(players) {
-  if (!players || !Array.isArray(players)) {
-    return;
-  }
-
   playersHandsDiv.innerHTML = "";
   players.forEach((player) => {
-    if (!player || !player.hand || !Array.isArray(player.hand)) {
-      console.error("Invalid player data:", player);
-      return;
-    }
-
     const playerDiv = document.createElement("div");
     playerDiv.className = "hand";
+    // On identifie la main par le pseudo du joueur
     playerDiv.dataset.pseudo = player.pseudo;
-    playerDiv.dataset.chooseCard = 0; // Initialiser ici
 
+    // Pour les mains des adversaires, on ajoute toujours la classe "dim"
     if (player.pseudo !== currentPseudo) {
       playerDiv.classList.add("dim");
     }
@@ -558,6 +530,7 @@ function displayPlayersHands(players) {
     playerName.textContent = player.pseudo;
     playerName.dataset.pseudo = player.pseudo;
 
+    // Ici, vous pouvez conserver le coloriage des pseudos selon vos critères
     if (gameLaunched) {
       if (player.pseudo === currentPseudo) {
         playerName.style.color = isPlayerTurn ? "#27ae60" : "#c0392b";
@@ -569,7 +542,7 @@ function displayPlayersHands(players) {
           : "#c0392b";
       }
     } else {
-      playerName.style.color = "#666";
+      playerName.style.color = "white";
     }
 
     const points = calculatePoints(player.hand);
@@ -585,6 +558,7 @@ function displayPlayersHands(players) {
     const deckContainer = document.createElement("div");
     deckContainer.className = "deck-row";
 
+    // Création de la grille de cartes (colonnes et lignes)
     const cardGrid = Array(4)
       .fill()
       .map(() => Array(3).fill(null));
@@ -594,10 +568,12 @@ function displayPlayersHands(players) {
       cardGrid[col][row] = card;
     });
 
+    // Pour chaque colonne
     for (let col = 0; col < 4; col++) {
       const column = document.createElement("div");
       column.className = "deck-column";
 
+      // Vérifier la complétude de la colonne
       const columnCards = cardGrid[col];
       const isColumnComplete = columnCards.every(
         (card) =>
@@ -611,7 +587,7 @@ function displayPlayersHands(players) {
       );
 
       for (let row = 0; row < 3; row++) {
-        const card = columnCards[row];
+        const card = cardGrid[col][row];
         if (card) {
           const cardImg = document.createElement("img");
           cardImg.classList.add("card", "rounded");
@@ -706,7 +682,7 @@ function flipCard(event) {
         image: card.dataset.image,
         value: card.dataset.value,
         pseudo: currentPseudo,
-        chooseCard: chooseCardCount,
+        // chooseCard: chooseCardCount,
       })
     );
 
@@ -733,6 +709,7 @@ function flipCard(event) {
           oldCardId: card.dataset.id,
           newCard: drawnCard,
           pseudo: currentPseudo,
+          // chooseCard: chooseCardCount,
         })
       );
     } else if (!visible && (hasDiscarded || drawSource === "deck")) {

@@ -90,6 +90,8 @@ function nextTurn(roomId) {
   const room = rooms[roomId];
   if (room) {
     room.currentTurn = (room.currentTurn + 1) % room.players.length;
+    console.log(`Next turn: ${room.currentTurn} for room ${roomId}`);
+
     room.players.forEach((player) => {
       if (player.ws.readyState === WebSocket.OPEN) {
         player.ws.send(
@@ -105,19 +107,13 @@ function nextTurn(roomId) {
         );
       }
     });
+
     // Réinitialiser les flags pour le nouveau joueur
     room.players.forEach((p) => {
       p.hasDrawn = false;
       p.hasDrawnAndDiscarded = false;
     });
   }
-}
-
-function calculateFlippedCardValue(player) {
-  return player.hand
-    .filter((card) => card.visible)
-    .slice(0, 2)
-    .reduce((total, card) => total + card.value, 0);
 }
 
 wss.on("connection", (ws) => {
@@ -234,17 +230,6 @@ wss.on("connection", (ws) => {
               (card) => card.id === data.cardId
             );
             if (cardIndex !== -1) {
-              // Vérifiez si le joueur a déjà retourné 2 cartes
-              if (player.chooseCard >= 2) {
-                ws.send(
-                  JSON.stringify({
-                    type: "error",
-                    message: "Vous ne pouvez pas retourner plus de 2 cartes.",
-                  })
-                );
-                break; // Sortir si le joueur a déjà retourné 2 cartes
-              }
-
               player.hand[cardIndex].visible = true;
               player.chooseCard++; // Incrémenter le nombre de cartes retournées
 
@@ -292,6 +277,92 @@ wss.on("connection", (ws) => {
                           })),
                           deckSize: rooms[flipRoomId].deck.length,
                           discardPile: rooms[flipRoomId].discardPile,
+                        })
+                      );
+                    }
+                  });
+                }
+              } else {
+                // Si ce n'est pas la phase initiale, passer au joueur suivant
+                nextTurn(flipRoomId);
+              }
+            }
+
+            const actionRoomId = ws.roomId;
+            if (actionRoomId && rooms[actionRoomId]) {
+              const player = rooms[actionRoomId].players.find(
+                (p) => p.pseudo === data.pseudo
+              );
+              const allCardsFlipped = areAllCardsFlipped(player);
+              if (allCardsFlipped && !rooms[actionRoomId].lastRoundTriggered) {
+                rooms[actionRoomId].lastRoundTriggered = true;
+                rooms[actionRoomId].players.forEach((p) => {
+                  if (p.ws.readyState === WebSocket.OPEN) {
+                    p.ws.send(
+                      JSON.stringify({
+                        type: "last-round-trigger",
+                        message: `${data.pseudo} a retourné toutes ses cartes, c'est le dernier tour !`,
+                      })
+                    );
+                  }
+                });
+              }
+
+              // Si le dernier tour a été déclenché, retourner automatiquement les cartes restantes
+              if (rooms[actionRoomId].lastRoundTriggered) {
+                player.hand.forEach((card) => {
+                  if (!card.visible) {
+                    card.visible = true;
+                  }
+                });
+
+                // Vérifier si tous les joueurs ont fini de jouer
+                const allPlayersFinished = rooms[actionRoomId].players.every(
+                  (p) => p.hand.every((card) => card.visible)
+                );
+
+                if (allPlayersFinished) {
+                  // Calculer le gagnant
+                  let winner = null;
+                  let lowestScore = Infinity;
+                  rooms[actionRoomId].players.forEach((p) => {
+                    const score = p.hand.reduce((total, card) => {
+                      return total + (card.value || 0);
+                    }, 0);
+
+                    if (score < lowestScore) {
+                      lowestScore = score;
+                      winner = p.pseudo;
+                    }
+                  });
+
+                  // Annoncer le gagnant
+                  rooms[actionRoomId].players.forEach((p) => {
+                    if (p.ws.readyState === WebSocket.OPEN) {
+                      const results = rooms[actionRoomId].players.map((pl) => {
+                        const hand = pl.hand || [];
+                        const score = hand.reduce((total, card) => {
+                          return total + (card.value || 0);
+                        }, 0);
+
+                        return {
+                          pseudo: pl.pseudo,
+                          score: score,
+                          hand: hand.map((card) => ({
+                            image: card.image,
+                            value: card.value,
+                            visible: true, // Assurez-vous que toutes les cartes sont visibles
+                            id: card.id,
+                          })),
+                        };
+                      });
+
+                      p.ws.send(
+                        JSON.stringify({
+                          type: "game-over",
+                          message: `Le gagnant est ${winner} avec un score de ${lowestScore} !`,
+                          winner: winner,
+                          results: results,
                         })
                       );
                     }
@@ -387,14 +458,6 @@ wss.on("connection", (ws) => {
               }
             }
 
-            // Log pour vérifier l'état des cartes après l'action
-            // console.log(
-            //   `Player ${data.pseudo} performed an action. Current hand state:`
-            // );
-            // player.hand.forEach((card, index) => {
-            //   console.log(`Card ${index + 1}: visible = ${card.visible}`);
-            // });
-
             // Informer tous les joueurs de l'action
             rooms[actionRoomId].players.forEach((p) => {
               if (p.ws.readyState === WebSocket.OPEN) {
@@ -421,12 +484,7 @@ wss.on("connection", (ws) => {
 
             // Vérifier si toutes les cartes du joueur sont visibles
             const allCardsFlipped = areAllCardsFlipped(player);
-            // console.log(
-            //   `All cards flipped for ${data.pseudo}: ${allCardsFlipped}`
-            // );
-
             if (allCardsFlipped && !rooms[actionRoomId].lastRoundTriggered) {
-              // console.log(`Sending last-round-trigger for ${data.pseudo}`);
               rooms[actionRoomId].lastRoundTriggered = true;
               rooms[actionRoomId].players.forEach((p) => {
                 if (p.ws.readyState === WebSocket.OPEN) {
@@ -462,9 +520,6 @@ wss.on("connection", (ws) => {
                     return total + (card.value || 0);
                   }, 0);
 
-                  // console.log(`Score for ${p.pseudo}: ${score}`); // Log pour déboguer
-
-                  // Trouver le joueur avec le score le plus bas
                   if (score < lowestScore) {
                     lowestScore = score;
                     winner = p.pseudo;
@@ -475,7 +530,7 @@ wss.on("connection", (ws) => {
                 rooms[actionRoomId].players.forEach((p) => {
                   if (p.ws.readyState === WebSocket.OPEN) {
                     const results = rooms[actionRoomId].players.map((pl) => {
-                      const hand = pl.hand || []; // Assurez-vous que la main est un tableau
+                      const hand = pl.hand || [];
                       const score = hand.reduce((total, card) => {
                         return total + (card.value || 0);
                       }, 0);
@@ -486,9 +541,9 @@ wss.on("connection", (ws) => {
                         hand: hand.map((card) => ({
                           image: card.image,
                           value: card.value,
-                          visible: card.visible,
+                          visible: true, // Assurez-vous que toutes les cartes sont visibles
                           id: card.id,
-                        })), // Ajout des informations sur la main
+                        })),
                       };
                     });
 
