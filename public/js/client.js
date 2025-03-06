@@ -644,6 +644,9 @@ function flipCard(event) {
   const visible = card.dataset.visible === "true";
   const owner = card.dataset.owner;
 
+  // Ajout de la classe d'animation
+  card.classList.add("flip-animation");
+
   // Récupérer l'élément du joueur
   const playerElement = document.querySelector(
     `[data-pseudo='${currentPseudo}']`
@@ -668,7 +671,25 @@ function flipCard(event) {
 
   if (!gameLaunched) {
     console.log("Phase initiale");
-    if (chooseCardCount >= 2 || visible) {
+
+    // if (chooseCardCount == 1) {
+    //   chooseCardCount++;
+    //   updateAvailableActions();
+    //   ws.send(
+    //     JSON.stringify({
+    //       type: "flip-card",
+    //       cardId: card.dataset.id,
+    //       image: card.dataset.image,
+    //       value: card.dataset.value,
+    //       pseudo: currentPseudo,
+    //     })
+    //   );
+
+    //   // Mettre à jour l'état de la carte
+    //   card.src = card.dataset.image;
+    //   card.dataset.visible = "true";
+    // }
+    if (chooseCardCount >= 2) {
       console.log("Impossible de retourner plus de cartes en phase initiale");
       return;
     }
@@ -682,7 +703,6 @@ function flipCard(event) {
         image: card.dataset.image,
         value: card.dataset.value,
         pseudo: currentPseudo,
-        // chooseCard: chooseCardCount,
       })
     );
 
@@ -709,7 +729,6 @@ function flipCard(event) {
           oldCardId: card.dataset.id,
           newCard: drawnCard,
           pseudo: currentPseudo,
-          // chooseCard: chooseCardCount,
         })
       );
     } else if (!visible && (hasDiscarded || drawSource === "deck")) {
@@ -785,6 +804,20 @@ style.textContent = `
     width: 100px;
     height: auto;
   }
+  .flip-animation {
+    animation: flip 0.6s forwards;
+  }
+  @keyframes flip {
+    0% {
+      transform: perspective(600px) rotateY(0);
+    }
+    50% {
+      transform: perspective(600px) rotateY(180deg);
+    }
+    100% {
+      transform: perspective(600px) rotateY(0);
+    }
+  }
 `;
 document.head.appendChild(style);
 
@@ -802,6 +835,21 @@ function updateAvailableActions() {
     hasDiscarded,
     drawSource,
   });
+
+  // if (!gameLaunched) {
+  //   console.log("Phase initiale");
+  //   if (chooseCardCount == 2) {
+  //     console.log("cacher le jeu");
+  //     deckElement.classList.add("dim");
+  //     discardPileElement.classList.add("dim");
+  //     if (localHandElement) localHandElement.classList.add("dim");
+  //     // return;
+  //   }
+  // } else {
+  //   deckElement.classList.remove("dim");
+  //   discardPileElement.classList.remove("dim");
+  //   if (localHandElement) localHandElement.classList.remove("dim");
+  // }
 
   if (!isPlayerTurn) {
     // Ce n'est pas votre tour : tout reste assombri.
@@ -892,28 +940,28 @@ function showGameOverPopup(winner, playersResults) {
   // }, 10000);
 
   // Ajout du bouton pour redémarrer la partie
-  const restartButton = document.createElement("button");
-  restartButton.innerText = "Redémarrer la partie";
-  restartButton.style.marginTop = "20px";
-  restartButton.style.padding = "10px 20px";
-  restartButton.style.backgroundColor = "#e74c3c";
-  restartButton.style.color = "#fff";
-  restartButton.style.border = "none";
-  restartButton.style.borderRadius = "5px";
-  restartButton.style.cursor = "pointer";
+  // const restartButton = document.createElement("button");
+  // restartButton.innerText = "Redémarrer la partie";
+  // restartButton.style.marginTop = "20px";
+  // restartButton.style.padding = "10px 20px";
+  // restartButton.style.backgroundColor = "#e74c3c";
+  // restartButton.style.color = "#fff";
+  // restartButton.style.border = "none";
+  // restartButton.style.borderRadius = "5px";
+  // restartButton.style.cursor = "pointer";
 
-  // Ajout de l'événement pour redémarrer la partie
-  restartButton.onclick = () => {
-    // Logique pour redémarrer la partie
-    // Vous pouvez appeler une fonction ici pour réinitialiser le jeu
-    console.log("Partie redémarrée !");
-    popup.remove(); // Ferme le popup après avoir cliqué sur le bouton
-    // Appeler une fonction pour réinitialiser le jeu
-    // restartGame(); // Assurez-vous d'avoir cette fonction définie
-  };
+  // // Ajout de l'événement pour redémarrer la partie
+  // restartButton.onclick = () => {
+  //   // Logique pour redémarrer la partie
+  //   // Vous pouvez appeler une fonction ici pour réinitialiser le jeu
+  //   console.log("Partie redémarrée !");
+  //   popup.remove(); // Ferme le popup après avoir cliqué sur le bouton
+  //   // Appeler une fonction pour réinitialiser le jeu
+  //   // restartGame(); // Assurez-vous d'avoir cette fonction définie
+  // };
 
-  popup.appendChild(restartButton);
-  popup.innerHTML += content; // Ajoutez le contenu après le bouton
+  // popup.appendChild(restartButton);
+  // popup.innerHTML += content; // Ajoutez le contenu après le bouton
 
   document.body.appendChild(popup);
 }
